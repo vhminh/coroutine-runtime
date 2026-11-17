@@ -7,11 +7,14 @@ OUT_DIR     := out
 
 LIB := $(OUT_DIR)/libcoroutine-runtime.a
 
-SRCS         := uring-version.cpp \
-                liburing-version.cpp
+SRCS         := context.cpp \
+                fiber.cpp \
+                liburing-version.cpp \
+                uring-version.cpp \
 
 EXAMPLE_SRCS := probe-uring-version.cpp \
-                probe-liburing-version.cpp
+                probe-liburing-version.cpp \
+                yield.cpp
 
 CXX ?= g++
 AR  ?= ar
