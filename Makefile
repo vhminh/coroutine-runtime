@@ -1,4 +1,4 @@
-.PHONY: all lib examples run clean fmt
+.PHONY: all lib examples run clean fmt dev
 
 SRC_DIR     := src
 HDR_DIR     := src
@@ -49,5 +49,9 @@ fmt:
 
 clean:
 	rm -rf $(OUT_DIR)
+
+dev:
+	docker build -t coroutine-runtime-dev - < Dockerfile
+	docker run --rm -it --security-opt seccomp=unconfined --cap-add SYS_PTRACE -v "$$PWD":/work coroutine-runtime-dev bash
 
 -include $(DEPS)
