@@ -8,5 +8,4 @@ struct Version {
 };
 
 Version get_uring_version();
-Version get_liburing_header_version();
 }; // namespace cr

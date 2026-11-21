@@ -11,11 +11,9 @@ SRCS         := arch/aarch64.cpp \
                 arch/x86_64.cpp \
                 context.cpp \
                 fiber.cpp \
-                liburing-version.cpp \
                 uring-version.cpp \
 
 EXAMPLE_SRCS := probe-uring-version.cpp \
-                probe-liburing-version.cpp \
                 yield.cpp
 
 CXX ?= g++
