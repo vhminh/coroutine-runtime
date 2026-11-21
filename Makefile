@@ -14,6 +14,7 @@ SRCS         := arch/aarch64.cpp \
                 uring-version.cpp \
 
 EXAMPLE_SRCS := probe-uring-version.cpp \
+                sleep_sort.cpp \
                 yield.cpp
 
 CXX ?= g++

@@ -7,54 +7,72 @@
 Context::Context() {}
 
 Fiber& Context::current() {
-    assert(this->active_fibers.size() > 0);
-    FiberID id = this->active_fibers.front();
+    assert(this->ready.size() > 0);
+    FiberID id = this->ready.front();
     return *fibers[id];
 }
 
 FiberID Context::current_fiber_id() const {
-    if (this->active_fibers.size()) {
-        return this->active_fibers.front();
+    if (this->ready.size()) {
+        return this->ready.front();
     }
     return -1;
 }
 
-FiberID Context::spawn(void (*func)(Context&)) {
+FiberID Context::spawn(std::function<void(Context&)> func) {
     Stack stack; // TODO: pool stacks
     FiberID id = ++this->max_fiber_id;
     fibers[id] = std::make_unique<Fiber>(*this, id, std::move(stack), func);
-    this->active_fibers.push_back(id);
+    this->ready.push_back(id);
     return id;
 }
 
 void Context::run_loop() {
-    while (active_fibers.size()) {
-        auto& fiber = this->current();
-        swap_context(&this->sched_sp, fiber.sp);
-        switch (fiber.state) {
-        case FiberState::Ready:
-            // yielded
-            active_fibers.pop_front();
-            active_fibers.push_back(fiber.id);
-            break;
-        case FiberState::Finish:
-            // finished
-            active_fibers.pop_front();
-            fibers.erase(fiber.id);
-            break;
+    while (this->fibers.size()) {
+        while (this->ready.size()) {
+            auto& fiber = this->current();
+            assert(fiber.state == FiberState::Ready);
+            swap_context(&this->sched_sp, fiber.sp);
+            if (fiber.state == FiberState::Finished) {
+                this->fibers.erase(fiber.id);
+            }
+        }
+        while (this->timers.size() && this->timers.top().first <= Clock::now()) {
+            FiberID fiber_id = this->timers.top().second;
+            this->timers.pop();
+            assert(this->fibers[fiber_id]->state == FiberState::Blocked);
+            this->fibers[fiber_id]->state = FiberState::Ready;
+            this->ready.push_back(fiber_id);
         }
     }
 }
 
-void Context::run_fiber(Fiber& f) {
-    f.func(f.parent);
-    f.state = FiberState::Finish;
-    swap_context(&f.sp, f.parent.sched_sp);
+void Context::run_fiber(Fiber& fiber) {
+    fiber.func(fiber.parent);
+    fiber.state = FiberState::Finished;
+
+    fiber.parent.ready.pop_front();
+
+    swap_context(&fiber.sp, fiber.parent.sched_sp);
     __builtin_unreachable();
 }
 
 void Context::yield() {
-    Fiber& current = this->current();
-    current.state = FiberState::Ready;
-    swap_context(&current.sp, this->sched_sp);
+    Fiber& fiber = this->current();
+    fiber.state = FiberState::Ready;
+
+    this->ready.pop_front();
+    this->ready.push_back(fiber.id);
+
+    swap_context(&fiber.sp, this->sched_sp);
+}
+
+void Context::sleep(Clock::duration duration) {
+    Fiber& fiber = this->current();
+    fiber.state = FiberState::Blocked;
+
+    this->ready.pop_front();
+    this->timers.push({Clock::now() + duration, fiber.id});
+
+    swap_context(&fiber.sp, this->sched_sp);
 }
