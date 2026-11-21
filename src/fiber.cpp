@@ -29,7 +29,7 @@ std::byte* Stack::top() const {
     return ptr + STACK_SIZE;
 }
 
-Fiber::Fiber(Context& parent, FiberID id, Stack&& stack, void (*func)(Context&)) :
+Fiber::Fiber(Context& parent, FiberID id, Stack&& stack, std::function<void(Context&)> func) :
     id(id), parent(parent), stack(std::move(stack)), state(FiberState::Ready), func(func) {
     this->initialize_stack();
 }

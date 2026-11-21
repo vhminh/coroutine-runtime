@@ -3,7 +3,9 @@
 #include "def.h"
 #include "fiber.h"
 
+#include <chrono>
 #include <deque>
+#include <queue>
 #include <unordered_map>
 
 extern "C" [[noreturn]] void fiber_start(Fiber* f);
@@ -17,16 +19,21 @@ public:
     Context(const Context&) = delete;
     Context(Context&&) = delete;
 
-    FiberID spawn(void (*func)(Context&));
+    using Clock = std::chrono::steady_clock;
+
+    FiberID spawn(std::function<void(Context&)>);
     FiberID current_fiber_id() const;
     void run_loop();
     void yield();
-    void sleep(long millis);
+    void sleep(Clock::duration);
 
 private:
-    size_t max_fiber_id = 0;
-    std::unordered_map<uint64_t, Box<Fiber>> fibers;
-    std::deque<uint64_t> active_fibers;
+    FiberID max_fiber_id = 0;
+    std::unordered_map<FiberID, Box<Fiber>> fibers;
+    std::deque<FiberID> ready;
+
+    using Timer = std::pair<Clock::time_point, FiberID>;
+    std::priority_queue<Timer, std::vector<Timer>, std::greater<Timer>> timers;
     Fiber& current();
 
     [[noreturn]] static void run_fiber(Fiber& f);
