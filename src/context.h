@@ -6,9 +6,12 @@
 #include <deque>
 #include <unordered_map>
 
+extern "C" [[noreturn]] void fiber_start(Fiber* f);
 void swap_context(void** save_sp, void* load_sp);
 
 class Context {
+    friend void fiber_start(Fiber*);
+
 public:
     Context();
     Context(const Context&) = delete;
@@ -20,11 +23,12 @@ public:
     void yield();
     void sleep(long millis);
 
-    void* sched_sp = nullptr;
-
 private:
     size_t max_fiber_id = 0;
     std::unordered_map<uint64_t, Box<Fiber>> fibers;
     std::deque<uint64_t> active_fibers;
     Fiber& current();
+
+    [[noreturn]] static void run_fiber(Fiber& f);
+    void* sched_sp = nullptr;
 };

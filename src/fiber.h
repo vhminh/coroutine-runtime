@@ -7,7 +7,8 @@ const size_t STACK_SIZE = 64 * 1024;
 
 class Context;
 
-struct Stack {
+class Stack {
+public:
     Stack();
     Stack(const Stack&) = delete;
     Stack(Stack&&);
@@ -19,7 +20,7 @@ private:
     std::byte* ptr;
 };
 
-enum FiberState {
+enum class FiberState {
     Ready,
     Finish,
 };

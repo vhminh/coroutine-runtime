@@ -22,8 +22,7 @@ FiberID Context::current_fiber_id() const {
 FiberID Context::spawn(void (*func)(Context&)) {
     Stack stack; // TODO: pool stacks
     FiberID id = ++this->max_fiber_id;
-    Box<Fiber> fiber = std::make_unique<Fiber>(*this, id, std::move(stack), func);
-    fibers[id] = std::move(fiber);
+    fibers[id] = std::make_unique<Fiber>(*this, id, std::move(stack), func);
     this->active_fibers.push_back(id);
     return id;
 }
@@ -41,9 +40,17 @@ void Context::run_loop() {
         case FiberState::Finish:
             // finished
             active_fibers.pop_front();
+            fibers.erase(fiber.id);
             break;
         }
     }
+}
+
+void Context::run_fiber(Fiber& f) {
+    f.func(f.parent);
+    f.state = FiberState::Finish;
+    swap_context(&f.sp, f.parent.sched_sp);
+    __builtin_unreachable();
 }
 
 void Context::yield() {

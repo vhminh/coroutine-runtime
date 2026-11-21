@@ -4,9 +4,7 @@
 #include "fiber.h"
 
 extern "C" void fiber_start(Fiber* f) {
-    f->func(f->parent);
-    f->state = FiberState::Finish;
-    swap_context(&f->sp, f->parent.sched_sp);
+    Context::run_fiber(*f);
 }
 void __attribute__((naked)) fiber_start_stub() {
     // move the arg from r12 to rdi and call `fiber_start`
@@ -30,6 +28,8 @@ void Fiber::initialize_stack() {
 }
 
 void __attribute__((naked)) swap_context(void** save_sp, void* load_sp) {
+    (void)save_sp;
+    (void)load_sp;
     asm("pushq   %rbp\n"
         "pushq   %rbx\n"
         "pushq   %r12\n"
