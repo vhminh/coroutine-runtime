@@ -1,4 +1,4 @@
-.PHONY: all lib examples run clean fmt dev
+.PHONY: all lib examples run clean fmt dev dev-x86
 
 SRC_DIR     := src
 HDR_DIR     := src
@@ -7,15 +7,20 @@ OUT_DIR     := out
 
 LIB := $(OUT_DIR)/libcoroutine-runtime.a
 
-SRCS         := uring-version.cpp \
-                liburing-version.cpp
+SRCS         := arch/aarch64.cpp \
+                arch/x86_64.cpp \
+                context.cpp \
+                fiber.cpp \
+                liburing-version.cpp \
+                uring-version.cpp \
 
 EXAMPLE_SRCS := probe-uring-version.cpp \
-                probe-liburing-version.cpp
+                probe-liburing-version.cpp \
+                yield.cpp
 
 CXX ?= g++
 AR  ?= ar
-CXXFLAGS += -O2 -std=c++20 -Wall -Wextra -MMD -MP -I $(HDR_DIR)
+CXXFLAGS += -O2 -std=c++20 -Wall -Wextra -Werror=attributes -MMD -MP -I $(HDR_DIR)
 LIBS := liburing
 CXXFLAGS += $(shell pkg-config --cflags $(LIBS))
 LDFLAGS += $(shell pkg-config --libs $(LIBS))
@@ -50,5 +55,8 @@ clean:
 dev:
 	docker build -t coroutine-runtime-dev - < Dockerfile
 	docker run --rm -it --security-opt seccomp=unconfined --cap-add SYS_PTRACE -v "$$PWD":/work coroutine-runtime-dev bash
+dev-x86:
+	docker build --platform linux/amd64 -t coroutine-runtime-dev-x86 - < Dockerfile
+	docker run --rm -it --platform linux/amd64 --security-opt seccomp=unconfined --cap-add SYS_PTRACE -v "$$PWD":/work coroutine-runtime-dev-x86 bash
 
 -include $(DEPS)
