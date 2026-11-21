@@ -19,15 +19,26 @@ private:
     std::byte* ptr;
 };
 
+enum FiberState {
+    Ready,
+    Finish,
+};
+
+typedef uint64_t FiberID;
+
 struct Fiber {
 public:
-    Fiber(const Context& parent, uint64_t id, Stack&&, void (*func)(Context&));
+    Fiber(Context& parent, FiberID id, Stack&&, void (*func)(Context&));
     Fiber(const Fiber&) = delete;
     ~Fiber();
-    const uint64_t id;
+    const FiberID id;
+
+    Context& parent;
+    const Stack stack;
+    void* sp = nullptr;
+    FiberState state;
+    void (*func)(Context&);
 
 private:
-    const Context& parent;
-    const Stack stack;
-    void (*func)(Context&);
+    void initialize_stack(); // platform specific
 };

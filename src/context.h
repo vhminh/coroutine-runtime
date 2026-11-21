@@ -3,7 +3,10 @@
 #include "def.h"
 #include "fiber.h"
 
-#include <vector>
+#include <deque>
+#include <unordered_map>
+
+void swap_context(void** save_sp, void* load_sp);
 
 class Context {
 public:
@@ -11,13 +14,17 @@ public:
     Context(const Context&) = delete;
     Context(Context&&) = delete;
 
-    const Fiber& spawn(void (*func)(Context&));
+    FiberID spawn(void (*func)(Context&));
+    FiberID current_fiber_id() const;
     void run_loop();
     void yield();
     void sleep(long millis);
 
+    void* sched_sp = nullptr;
+
 private:
-    Fiber const* running = nullptr;
-    size_t num_fibers = 0;
-    std::vector<Box<Fiber>> fibers;
+    size_t max_fiber_id = 0;
+    std::unordered_map<uint64_t, Box<Fiber>> fibers;
+    std::deque<uint64_t> active_fibers;
+    Fiber& current();
 };

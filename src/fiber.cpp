@@ -1,5 +1,7 @@
 #include "fiber.h"
 
+#include "context.h"
+
 #include <cassert>
 #include <sys/mman.h>
 #include <utility>
@@ -24,10 +26,12 @@ Stack::~Stack() {
 }
 
 std::byte* Stack::top() const {
-    return ptr + STACK_SIZE - 1;
+    return ptr + STACK_SIZE;
 }
 
-Fiber::Fiber(const Context& parent, uint64_t id, Stack&& stack, void (*func)(Context&)) :
-    id(id), parent(parent), stack(std::move(stack)), func(func) {}
+Fiber::Fiber(Context& parent, FiberID id, Stack&& stack, void (*func)(Context&)) :
+    id(id), parent(parent), stack(std::move(stack)), state(FiberState::Ready), func(func) {
+    this->initialize_stack();
+}
 
 Fiber::~Fiber() {}
