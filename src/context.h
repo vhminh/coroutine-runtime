@@ -5,7 +5,7 @@
 
 #include <chrono>
 #include <deque>
-#include <iostream>
+#include <iosfwd>
 #include <liburing.h>
 #include <queue>
 #include <sys/socket.h>
@@ -74,5 +74,5 @@ private:
     SemaphoreID max_sem_id = 0;
     std::unordered_map<SemaphoreID, Box<Semaphore>> semaphores;
 
-    void dump_state(std::ostream& = std::cerr);
+    void dump_state(std::ostream&);
 };

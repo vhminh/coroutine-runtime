@@ -22,10 +22,8 @@ Fiber& Context::current() {
 }
 
 FiberID Context::current_fiber_id() const {
-    if (this->ready.size()) {
-        return this->ready.front();
-    }
-    return -1;
+    assert(this->running != nullptr && "not running inside a fiber");
+    return this->running->id;
 }
 
 FiberID Context::spawn(std::function<void(Context&)> func) {
@@ -71,8 +69,10 @@ void Context::run_loop() {
             fiber.resume_value = nullptr;
             this->running = &fiber;
             swap_context(&this->sched_sp, fiber.sp, resume_value);
+            this->running = nullptr;
             if (fiber.state == FiberState::Finished) {
-                this->fibers.erase(fiber.id);
+                auto id = fiber.id;
+                this->fibers.erase(id);
             }
         }
         // wait for timers or IO events
@@ -128,7 +128,6 @@ void Context::run_fiber(Fiber& fiber) {
     fiber.func(fiber.parent);
 
     fiber.parent.mark_finished(fiber);
-
     swap_context(&fiber.sp, fiber.parent.sched_sp, nullptr);
     __builtin_unreachable();
 }
@@ -152,16 +151,15 @@ void Context::mark_finished(Fiber& fiber) {
 void Context::yield() {
     auto& fiber = this->current();
     this->mark_ready(fiber);
-
     swap_context(&fiber.sp, this->sched_sp, nullptr);
 }
 
 void Context::sleep(Clock::duration duration) {
     auto& fiber = this->current();
-    this->mark_blocked(fiber);
 
     this->timers.push({Clock::now() + duration, fiber.id});
 
+    this->mark_blocked(fiber);
     swap_context(&fiber.sp, this->sched_sp, nullptr);
 }
 
@@ -179,24 +177,24 @@ int Context::accept(int fd, sockaddr* addr, socklen_t* len, int flags) {
 
 int Context::recv(int fd, void* buf, size_t len, int flags) {
     auto& fiber = this->current();
-    this->mark_blocked(fiber);
 
     io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
     assert(sqe != nullptr);
     io_uring_prep_recv(sqe, fd, buf, len, flags);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
 
+    this->mark_blocked(fiber);
     return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
 int Context::send(int fd, const void* buf, size_t len, int flags) {
     auto& fiber = this->current();
-    this->mark_blocked(fiber);
 
     io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
     assert(sqe != nullptr);
     io_uring_prep_send(sqe, fd, buf, len, flags);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
 
+    this->mark_blocked(fiber);
     return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
 
