@@ -15,6 +15,7 @@ SRCS         := arch/aarch64.cpp \
 
 EXAMPLE_SRCS := echo_server.cpp \
                 probe-uring-version.cpp \
+                semaphore.cpp \
                 sleep_sort.cpp \
                 yield.cpp
 
