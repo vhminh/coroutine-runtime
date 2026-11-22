@@ -40,7 +40,7 @@ void Context::run_loop() {
         while (this->timers.size() && this->timers.top().first <= Clock::now()) {
             FiberID fiber_id = this->timers.top().second;
             this->timers.pop();
-            this->mark_ready(this->fibers.at(fiber_id));
+            this->mark_ready(*this->fibers.at(fiber_id));
         }
         // check IO events
         {
