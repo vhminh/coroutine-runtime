@@ -32,8 +32,8 @@ swap_context:
     stp  d10, d11, [sp, #112]
     stp  d12, d13, [sp, #128]
     stp  d14, d15, [sp, #144]
-    mov  x2, sp
-    str  x2, [x0]             // *save_sp = sp
+    mov  x3, sp
+    str  x3, [x0]             // *save_sp = sp
     mov  sp, x1               // sp = load_sp
     ldp  x19, x20, [sp, #0]
     ldp  x21, x22, [sp, #16]
@@ -46,6 +46,7 @@ swap_context:
     ldp  d12, d13, [sp, #128]
     ldp  d14, d15, [sp, #144]
     add  sp, sp, #160
+    mov  x0, x2               // return = ret_val
     ret
 
     .globl fiber_start_stub
