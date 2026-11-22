@@ -32,7 +32,7 @@ void Context::run_loop() {
         while (this->ready.size()) {
             auto& fiber = this->current();
             assert(fiber.state == FiberState::Ready);
-            swap_context(&this->sched_sp, fiber.sp);
+            swap_context(&this->sched_sp, fiber.sp, nullptr);
             if (fiber.state == FiberState::Finished) {
                 this->fibers.erase(fiber.id);
             }
@@ -53,7 +53,7 @@ void Context::run_fiber(Fiber& fiber) {
 
     fiber.parent.ready.pop_front();
 
-    swap_context(&fiber.sp, fiber.parent.sched_sp);
+    swap_context(&fiber.sp, fiber.parent.sched_sp, nullptr);
     __builtin_unreachable();
 }
 
@@ -64,7 +64,7 @@ void Context::yield() {
     this->ready.pop_front();
     this->ready.push_back(fiber.id);
 
-    swap_context(&fiber.sp, this->sched_sp);
+    swap_context(&fiber.sp, this->sched_sp, nullptr);
 }
 
 void Context::sleep(Clock::duration duration) {
@@ -74,5 +74,5 @@ void Context::sleep(Clock::duration duration) {
     this->ready.pop_front();
     this->timers.push({Clock::now() + duration, fiber.id});
 
-    swap_context(&fiber.sp, this->sched_sp);
+    swap_context(&fiber.sp, this->sched_sp, nullptr);
 }
