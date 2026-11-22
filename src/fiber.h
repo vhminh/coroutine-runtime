@@ -40,6 +40,7 @@ public:
     const Stack stack;
     void* sp = nullptr;
     FiberState state;
+    void* resume_value = nullptr;
     std::function<void(Context&)> func;
 
 private:

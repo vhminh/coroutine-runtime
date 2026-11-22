@@ -31,9 +31,9 @@ public:
     void run_loop();
     void yield();
     void sleep(Clock::duration);
-    void accept(int fd, sockaddr* addr, socklen_t* len, int flags);
-    void recv(int fd, void* buf, size_t len, int flags);
-    void send(int fd, const void* buf, size_t len, int flags);
+    int accept(int fd, sockaddr* addr, socklen_t* len, int flags);
+    int recv(int fd, void* buf, size_t len, int flags);
+    int send(int fd, const void* buf, size_t len, int flags);
 
 private:
     FiberID max_fiber_id = 0;

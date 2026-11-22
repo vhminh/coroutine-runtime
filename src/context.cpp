@@ -2,7 +2,9 @@
 
 #include "fiber.h"
 
+#include <array>
 #include <cassert>
+#include <utility>
 
 Context::Context() {
     int ret = io_uring_queue_init(IO_URING_QUEUE_DEPTH, &this->uring, 0);
@@ -36,14 +38,7 @@ FiberID Context::spawn(std::function<void(Context&)> func) {
 
 void Context::run_loop() {
     while (this->fibers.size()) {
-        while (this->ready.size()) {
-            auto& fiber = this->current();
-            assert(fiber.state == FiberState::Ready);
-            swap_context(&this->sched_sp, fiber.sp, nullptr);
-            if (fiber.state == FiberState::Finished) {
-                this->fibers.erase(fiber.id);
-            }
-        }
+        // check timers
         while (this->timers.size() && this->timers.top().first <= Clock::now()) {
             FiberID fiber_id = this->timers.top().second;
             this->timers.pop();
@@ -51,15 +46,44 @@ void Context::run_loop() {
             this->fibers[fiber_id]->state = FiberState::Ready;
             this->ready.push_back(fiber_id);
         }
-        io_uring_cqe* cqes = nullptr;
-        int count;
-        while ((count = io_uring_peek_batch_cqe(&this->uring, &cqes, 10)) > 0) {
-            for (int i = 0; i < count; ++i) {
-                io_uring_cqe* cqe = cqes + i;
+        // check IO events
+        {
+            io_uring_cqe* cqe;
+            unsigned head, i = 0;
+            io_uring_for_each_cqe(&this->uring, head, cqe) {
                 FiberID fiber_id = reinterpret_cast<FiberID>(io_uring_cqe_get_data(cqe));
-                io_uring_cqe_seen(&this->uring, cqe);
-                this->ready.push_front(fiber_id);
+                Fiber& fiber = *this->fibers.at(fiber_id);
+                assert(fiber.state == FiberState::Blocked);
+                fiber.state = FiberState::Ready;
+                fiber.resume_value = reinterpret_cast<void*>(static_cast<intptr_t>(cqe->res));
+                this->ready.push_back(fiber_id);
+                i++;
             }
+
+            io_uring_cq_advance(&this->uring, i);
+        }
+        // process any ready fibers
+        for (int count = this->ready.size(); count > 0; --count) {
+            auto& fiber = this->current();
+            assert(fiber.state == FiberState::Ready);
+            swap_context(&this->sched_sp, fiber.sp, fiber.resume_value);
+            if (fiber.state == FiberState::Finished) {
+                this->fibers.erase(fiber.id);
+            }
+        }
+        // wait for timers or IO events
+        if (this->fibers.size() && this->ready.empty()) {
+            __kernel_timespec ts;
+            __kernel_timespec* tsp = nullptr; // wait forever
+            if (!this->timers.empty()) {
+                auto duration = this->timers.top().first - Clock::now();
+                auto ns = std::max<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count(), 0);
+                ts = {.tv_sec = ns / 1'000'000'000, .tv_nsec = ns % 1'000'000'000};
+                tsp = &ts;
+            }
+            io_uring_cqe* cqe;
+            int ret = io_uring_wait_cqe_timeout(&this->uring, &cqe, tsp);
+            assert(ret == 0 || ret == -ETIME);
         }
     }
 }
@@ -94,28 +118,46 @@ void Context::sleep(Clock::duration duration) {
     swap_context(&fiber.sp, this->sched_sp, nullptr);
 }
 
-void Context::accept(int fd, sockaddr* addr, socklen_t* len, int flags) {
+int Context::accept(int fd, sockaddr* addr, socklen_t* len, int flags) {
     Fiber& fiber = this->current();
+    fiber.state = FiberState::Blocked;
+
+    this->ready.pop_front();
+
     io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
     assert(sqe != nullptr);
     io_uring_prep_accept(sqe, fd, addr, len, flags);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
     io_uring_submit(&this->uring);
+
+    return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
 
-void Context::recv(int fd, void* buf, size_t len, int flags) {
+int Context::recv(int fd, void* buf, size_t len, int flags) {
     Fiber& fiber = this->current();
+    fiber.state = FiberState::Blocked;
+
+    this->ready.pop_front();
+
     io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
     assert(sqe != nullptr);
     io_uring_prep_recv(sqe, fd, buf, len, flags);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
     io_uring_submit(&this->uring);
+
+    return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
-void Context::send(int fd, const void* buf, size_t len, int flags) {
+int Context::send(int fd, const void* buf, size_t len, int flags) {
     Fiber& fiber = this->current();
+    fiber.state = FiberState::Blocked;
+
+    this->ready.pop_front();
+
     io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
     assert(sqe != nullptr);
     io_uring_prep_send(sqe, fd, buf, len, flags);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
     io_uring_submit(&this->uring);
+
+    return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
