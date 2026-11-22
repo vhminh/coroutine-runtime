@@ -4,7 +4,14 @@
 
 #include <cassert>
 
-Context::Context() {}
+Context::Context() {
+    int ret = io_uring_queue_init(IO_URING_QUEUE_DEPTH, &this->uring, 0);
+    assert(ret == 0);
+}
+
+Context::~Context() {
+    io_uring_queue_exit(&this->uring);
+}
 
 Fiber& Context::current() {
     assert(this->ready.size() > 0);
@@ -44,6 +51,16 @@ void Context::run_loop() {
             this->fibers[fiber_id]->state = FiberState::Ready;
             this->ready.push_back(fiber_id);
         }
+        io_uring_cqe* cqes = nullptr;
+        int count;
+        while ((count = io_uring_peek_batch_cqe(&this->uring, &cqes, 10)) > 0) {
+            for (int i = 0; i < count; ++i) {
+                io_uring_cqe* cqe = cqes + i;
+                FiberID fiber_id = reinterpret_cast<FiberID>(io_uring_cqe_get_data(cqe));
+                io_uring_cqe_seen(&this->uring, cqe);
+                this->ready.push_front(fiber_id);
+            }
+        }
     }
 }
 
@@ -75,4 +92,30 @@ void Context::sleep(Clock::duration duration) {
     this->timers.push({Clock::now() + duration, fiber.id});
 
     swap_context(&fiber.sp, this->sched_sp);
+}
+
+void Context::accept(int fd, sockaddr* addr, socklen_t* len, int flags) {
+    Fiber& fiber = this->current();
+    io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
+    assert(sqe != nullptr);
+    io_uring_prep_accept(sqe, fd, addr, len, flags);
+    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
+    io_uring_submit(&this->uring);
+}
+
+void Context::recv(int fd, void* buf, size_t len, int flags) {
+    Fiber& fiber = this->current();
+    io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
+    assert(sqe != nullptr);
+    io_uring_prep_recv(sqe, fd, buf, len, flags);
+    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
+    io_uring_submit(&this->uring);
+}
+void Context::send(int fd, const void* buf, size_t len, int flags) {
+    Fiber& fiber = this->current();
+    io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
+    assert(sqe != nullptr);
+    io_uring_prep_send(sqe, fd, buf, len, flags);
+    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
+    io_uring_submit(&this->uring);
 }

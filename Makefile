@@ -13,7 +13,8 @@ SRCS         := arch/aarch64.cpp \
                 fiber.cpp \
                 uring-version.cpp \
 
-EXAMPLE_SRCS := probe-uring-version.cpp \
+EXAMPLE_SRCS := echo_server.cpp \
+                probe-uring-version.cpp \
                 sleep_sort.cpp \
                 yield.cpp
 
