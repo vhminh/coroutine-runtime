@@ -28,9 +28,10 @@ void Fiber::initialize_stack() {
     this->sp = sp;
 }
 
-void __attribute__((naked)) swap_context(void** save_sp, void* load_sp) {
+void* __attribute__((naked)) swap_context(void** save_sp, void* load_sp, void* ret_val) {
     (void)save_sp;
     (void)load_sp;
+    (void)ret_val;
     asm("pushq   %rbp\n"
         "pushq   %rbx\n"
         "pushq   %r12\n"
@@ -45,6 +46,7 @@ void __attribute__((naked)) swap_context(void** save_sp, void* load_sp) {
         "popq    %r12\n"
         "popq    %rbx\n"
         "popq    %rbp\n"
+        "movq    %rdx, %rax   # rax = ret_val\n"
         "ret\n");
 }
 
