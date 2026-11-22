@@ -14,7 +14,7 @@ int main() {
     int ret;
     ret = setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
     assert(ret == 0);
-    sockaddr_in addr{.sin_family = AF_INET, .sin_port = htons(8080), .sin_addr = {INADDR_ANY}};
+    sockaddr_in addr{.sin_family = AF_INET, .sin_port = htons(8080), .sin_addr = {INADDR_ANY}, .sin_zero = {}};
     ret = bind(sock_fd, reinterpret_cast<sockaddr*>(&addr), sizeof addr);
     assert(ret == 0);
     ret = listen(sock_fd, SOMAXCONN);
@@ -34,7 +34,7 @@ int main() {
                 char buf[4096];
                 while (true) {
                     int n = c.recv(fd, buf, sizeof(buf), 0);
-                    std::cout << "[" << fd << "] received " << n << " bytes: " << buf << std::endl;
+                    std::cout << "[" << fd << "] received " << n << " bytes: " << std::string_view(buf, n) << std::endl;
                     if (n <= 0) {
                         std::cout << "[" << fd << "] recv error: " << errno << std::endl;
                         goto end;
