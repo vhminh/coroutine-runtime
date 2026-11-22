@@ -2,9 +2,7 @@
 
 #include "fiber.h"
 
-#include <array>
 #include <cassert>
-#include <utility>
 
 Context::Context() {
     int ret = io_uring_queue_init(IO_URING_QUEUE_DEPTH, &this->uring, 0);

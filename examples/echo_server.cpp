@@ -34,11 +34,11 @@ int main() {
                 char buf[4096];
                 while (true) {
                     int n = c.recv(fd, buf, sizeof(buf), 0);
-                    std::cout << "[" << fd << "] received " << n << " bytes: " << std::string_view(buf, n) << std::endl;
                     if (n <= 0) {
                         std::cout << "[" << fd << "] recv error: " << errno << std::endl;
                         goto end;
                     }
+                    std::cout << "[" << fd << "] received " << n << " bytes: " << std::string_view(buf, n) << std::endl;
                     for (ssize_t off = 0; off < n;) {
                         int m = c.send(fd, buf + off, n - off, 0);
                         if (m <= 0) {
