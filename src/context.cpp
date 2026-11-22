@@ -72,18 +72,20 @@ void Context::run_loop() {
             }
         }
         // wait for timers or IO events
-        if (this->fibers.size() && this->ready.empty()) {
-            __kernel_timespec ts;
-            __kernel_timespec* tsp = nullptr; // wait forever
+        if (this->ready.empty()) {
             if (!this->timers.empty()) {
                 auto duration = this->timers.top().first - Clock::now();
                 auto ns = std::max<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count(), 0);
-                ts = {.tv_sec = ns / 1'000'000'000, .tv_nsec = ns % 1'000'000'000};
-                tsp = &ts;
+                __kernel_timespec ts = {.tv_sec = ns / 1'000'000'000, .tv_nsec = ns % 1'000'000'000};
+                io_uring_cqe* cqe;
+                int ret = io_uring_submit_and_wait_timeout(&this->uring, &cqe, 1, &ts, nullptr);
+                assert(ret >= 0 || ret == -ETIME || ret == -EINTR);
+            } else {
+                int ret = io_uring_submit_and_wait(&this->uring, 1);
+                assert(ret >= 0 || ret == -EINTR);
             }
-            io_uring_cqe* cqe;
-            int ret = io_uring_wait_cqe_timeout(&this->uring, &cqe, tsp);
-            assert(ret == 0 || ret == -ETIME);
+        } else {
+            io_uring_submit(&this->uring);
         }
     }
 }
@@ -128,7 +130,6 @@ int Context::accept(int fd, sockaddr* addr, socklen_t* len, int flags) {
     assert(sqe != nullptr);
     io_uring_prep_accept(sqe, fd, addr, len, flags);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
-    io_uring_submit(&this->uring);
 
     return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
@@ -143,7 +144,6 @@ int Context::recv(int fd, void* buf, size_t len, int flags) {
     assert(sqe != nullptr);
     io_uring_prep_recv(sqe, fd, buf, len, flags);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
-    io_uring_submit(&this->uring);
 
     return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
@@ -157,7 +157,6 @@ int Context::send(int fd, const void* buf, size_t len, int flags) {
     assert(sqe != nullptr);
     io_uring_prep_send(sqe, fd, buf, len, flags);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
-    io_uring_submit(&this->uring);
 
     return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
