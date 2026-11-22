@@ -55,7 +55,7 @@ public:
 
 private:
     [[noreturn]] static void run_fiber(Fiber& f);
-    void mark_ready(Fiber&);
+    void mark_ready(Fiber&, void* resume_val = nullptr);
     void mark_blocked(Fiber&);
     void mark_finished(Fiber&);
     void* sched_sp = nullptr;

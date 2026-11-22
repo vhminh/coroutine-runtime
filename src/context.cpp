@@ -40,9 +40,7 @@ void Context::run_loop() {
         while (this->timers.size() && this->timers.top().first <= Clock::now()) {
             FiberID fiber_id = this->timers.top().second;
             this->timers.pop();
-            assert(this->fibers[fiber_id]->state == FiberState::Blocked);
-            this->fibers[fiber_id]->state = FiberState::Ready;
-            this->ready.push_back(fiber_id);
+            this->mark_ready(this->fibers.at(fiber_id));
         }
         // check IO events
         {
@@ -51,10 +49,7 @@ void Context::run_loop() {
             io_uring_for_each_cqe(&this->uring, head, cqe) {
                 FiberID fiber_id = reinterpret_cast<FiberID>(io_uring_cqe_get_data(cqe));
                 Fiber& fiber = *this->fibers.at(fiber_id);
-                assert(fiber.state == FiberState::Blocked);
-                fiber.state = FiberState::Ready;
-                fiber.resume_value = reinterpret_cast<void*>(static_cast<intptr_t>(cqe->res));
-                this->ready.push_back(fiber_id);
+                this->mark_ready(fiber, reinterpret_cast<void*>(static_cast<intptr_t>(cqe->res)));
                 i++;
             }
 
@@ -132,9 +127,10 @@ void Context::run_fiber(Fiber& fiber) {
     __builtin_unreachable();
 }
 
-void Context::mark_ready(Fiber& fiber) {
+void Context::mark_ready(Fiber& fiber, void* resume_val) {
     assert(fiber.state == FiberState::Ready || fiber.state == FiberState::Blocked);
     fiber.state = FiberState::Ready;
+    fiber.resume_value = resume_val;
     this->ready.push_back(fiber.id);
 }
 
@@ -165,13 +161,13 @@ void Context::sleep(Clock::duration duration) {
 
 int Context::accept(int fd, sockaddr* addr, socklen_t* len, int flags) {
     auto& fiber = this->current();
-    this->mark_blocked(fiber);
 
     io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
     assert(sqe != nullptr);
     io_uring_prep_accept(sqe, fd, addr, len, flags);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
 
+    this->mark_blocked(fiber);
     return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
 
