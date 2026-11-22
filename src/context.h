@@ -9,7 +9,7 @@
 #include <unordered_map>
 
 extern "C" [[noreturn]] void fiber_start(Fiber* f);
-void swap_context(void** save_sp, void* load_sp);
+extern "C" void swap_context(void** save_sp, void* load_sp);
 
 class Context {
     friend void fiber_start(Fiber*);

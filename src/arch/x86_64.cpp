@@ -6,6 +6,7 @@
 extern "C" void fiber_start(Fiber* f) {
     Context::run_fiber(*f);
 }
+
 void __attribute__((naked)) fiber_start_stub() {
     // move the arg from r12 to rdi and call `fiber_start`
     asm("movq %r12, %rdi\n"
