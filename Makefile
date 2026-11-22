@@ -13,7 +13,8 @@ SRCS         := arch/aarch64.cpp \
                 fiber.cpp \
                 uring-version.cpp \
 
-EXAMPLE_SRCS := probe-uring-version.cpp \
+EXAMPLE_SRCS := echo_server.cpp \
+                probe-uring-version.cpp \
                 sleep_sort.cpp \
                 yield.cpp
 
@@ -53,9 +54,9 @@ clean:
 
 dev:
 	docker build -t coroutine-runtime-dev - < Dockerfile
-	docker run --rm -it --security-opt seccomp=unconfined --cap-add SYS_PTRACE -v "$$PWD":/work coroutine-runtime-dev bash
+	docker run --rm -it -p 8080:8080 --security-opt seccomp=unconfined --cap-add SYS_PTRACE -v "$$PWD":/work coroutine-runtime-dev bash
 dev-x86:
 	docker build --platform linux/amd64 -t coroutine-runtime-dev-x86 - < Dockerfile
-	docker run --rm -it --platform linux/amd64 --security-opt seccomp=unconfined --cap-add SYS_PTRACE -v "$$PWD":/work coroutine-runtime-dev-x86 bash
+	docker run --rm -it -p 8080:8080 --platform linux/amd64 --security-opt seccomp=unconfined --cap-add SYS_PTRACE -v "$$PWD":/work coroutine-runtime-dev-x86 bash
 
 -include $(DEPS)
