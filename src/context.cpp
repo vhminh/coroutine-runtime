@@ -64,7 +64,9 @@ void Context::run_loop() {
         for (int count = this->ready.size(); count > 0; --count) {
             auto& fiber = this->current();
             assert(fiber.state == FiberState::Ready);
-            swap_context(&this->sched_sp, fiber.sp, fiber.resume_value);
+            void* resume_value = fiber.resume_value;
+            fiber.resume_value = nullptr;
+            swap_context(&this->sched_sp, fiber.sp, resume_value);
             if (fiber.state == FiberState::Finished) {
                 this->fibers.erase(fiber.id);
             }
