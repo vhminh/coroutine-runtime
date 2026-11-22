@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <deque>
+#include <iostream>
 #include <liburing.h>
 #include <queue>
 #include <sys/socket.h>
@@ -14,6 +15,17 @@ const size_t IO_URING_QUEUE_DEPTH = 2048;
 
 extern "C" [[noreturn]] void fiber_start(Fiber* f);
 extern "C" void* swap_context(void** save_sp, void* load_sp, void* ret_val);
+
+typedef uint64_t SemaphoreID;
+
+struct Semaphore {
+    Semaphore(Context& parent, SemaphoreID id, size_t initial_count);
+    Semaphore(const Semaphore&) = delete;
+    Context& parent;
+    const SemaphoreID id;
+    size_t count;
+    std::deque<FiberID> waiters;
+};
 
 class Context {
     friend void fiber_start(Fiber*);
@@ -35,17 +47,32 @@ public:
     int recv(int fd, void* buf, size_t len, int flags);
     int send(int fd, const void* buf, size_t len, int flags);
 
+    SemaphoreID new_semaphore(size_t initial_count = 0);
+    void free_semaphore(SemaphoreID);
+    void acquire(SemaphoreID);
+    void release(SemaphoreID);
+    bool try_acquire(SemaphoreID);
+
 private:
+    [[noreturn]] static void run_fiber(Fiber& f);
+    void mark_ready(Fiber&);
+    void mark_blocked(Fiber&);
+    void mark_finished(Fiber&);
+    void* sched_sp = nullptr;
+    Fiber* running = nullptr;
+    Fiber& current();
+
     FiberID max_fiber_id = 0;
     std::unordered_map<FiberID, Box<Fiber>> fibers;
     std::deque<FiberID> ready;
 
     using Timer = std::pair<Clock::time_point, FiberID>;
     std::priority_queue<Timer, std::vector<Timer>, std::greater<Timer>> timers;
-    Fiber& current();
 
     io_uring uring;
 
-    [[noreturn]] static void run_fiber(Fiber& f);
-    void* sched_sp = nullptr;
+    SemaphoreID max_sem_id = 0;
+    std::unordered_map<SemaphoreID, Box<Semaphore>> semaphores;
+
+    void dump_state(std::ostream& = std::cerr);
 };
