@@ -28,7 +28,7 @@ public:
         if (this->is_closed) {
             return false;
         }
-        if (this->buffer.size() >= this->capacity) {
+        while (!this->is_closed && this->buffer.size() >= this->capacity) {
             auto& fiber = this->ctx.current();
             full_waiters.push_back(fiber.id);
             this->ctx.park(fiber);
@@ -62,16 +62,15 @@ public:
         if (this->is_closed && this->buffer.empty()) {
             return std::nullopt;
         }
-        if (this->buffer.empty()) {
+        while (!this->is_closed && this->buffer.empty()) {
             auto& fiber = this->ctx.current();
             empty_waiters.push_back(fiber.id);
             this->ctx.park(fiber);
         }
-        if (this->is_closed && this->buffer.empty()) {
-            // channel closed while we're blocking
+        if (this->buffer.empty()) {
+            // channel closed and drained while we're blocking
             return std::nullopt;
         }
-        CR_ASSERT(this->buffer.size());
         T out = std::move(this->buffer.front());
         this->buffer.pop_front();
         this->notify_item_removed();
