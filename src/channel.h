@@ -148,7 +148,7 @@ public:
     bool closed() const { return impl->closed(); }
 
 private:
-    Sender(Arc<ChanImpl<T>> impl) : impl(impl) {}
+    explicit Sender(Arc<ChanImpl<T>> impl) : impl(std::move(impl)) {}
 
     Arc<ChanImpl<T>> impl;
 };
@@ -164,7 +164,7 @@ public:
     bool closed() const { return impl->closed(); }
 
 private:
-    Receiver(Arc<ChanImpl<T>> impl) : impl(impl) {}
+    explicit Receiver(Arc<ChanImpl<T>> impl) : impl(std::move(impl)) {}
 
     Arc<ChanImpl<T>> impl;
 };
