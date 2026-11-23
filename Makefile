@@ -11,10 +11,10 @@ SRCS         := arch/aarch64.cpp \
                 arch/x86_64.cpp \
                 context.cpp \
                 fiber.cpp \
-                uring-version.cpp \
+                io-uring-version.cpp \
 
 EXAMPLE_SRCS := echo_server.cpp \
-                probe-uring-version.cpp \
+                probe-io-uring-version.cpp \
                 semaphore.cpp \
                 sleep_sort.cpp \
                 yield.cpp

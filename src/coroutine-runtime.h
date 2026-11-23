@@ -2,10 +2,8 @@
 
 #include "context.h"
 
-namespace cr {
-struct Version {
+struct IOUringVersion {
     int major, minor;
 };
 
-Version get_uring_version();
-}; // namespace cr
+IOUringVersion get_io_uring_version();
