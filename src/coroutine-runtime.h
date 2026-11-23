@@ -1,6 +1,7 @@
 #pragma once
 
 #include "context.h"
+#include "semaphore.h"
 
 struct IOUringVersion {
     int major, minor;

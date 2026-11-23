@@ -3,9 +3,6 @@
 #include "check.h"
 #include "fiber.h"
 
-Semaphore::Semaphore(Context& parent, SemaphoreID id, size_t initial_count) :
-    parent(parent), id(id), count(initial_count) {}
-
 Context::Context() {
     int ret = io_uring_queue_init(IO_URING_QUEUE_DEPTH, &this->uring, 0);
     if (ret != 0) {
@@ -131,9 +128,9 @@ void Context::run_fiber(Fiber& fiber) {
     try {
         fiber.func(fiber.parent);
     } catch (const std::exception& e) {
-        std::fprintf(stderr, "coroutine-runtime: fiber %llu threw: %s\n", fiber.id, e.what());
+        std::fprintf(stderr, "coroutine-runtime: fiber %lu threw: %s\n", fiber.id, e.what());
     } catch (...) {
-        std::fprintf(stderr, "coroutine-runtime: fiber %llu threw a non-std exception\n", fiber.id);
+        std::fprintf(stderr, "coroutine-runtime: fiber %lu threw a non-std exception\n", fiber.id);
     }
     fiber.parent.mark_finished(fiber);
     swap_context(&fiber.sp, fiber.parent.sched_sp, nullptr);
@@ -212,54 +209,4 @@ int Context::close(int fd) {
     io_uring_sqe* sqe = get_sqe(&this->uring);
     io_uring_prep_close(sqe, fd);
     return this->block_on(sqe);
-}
-
-SemaphoreID Context::new_semaphore(size_t initial_count) {
-    SemaphoreID id = ++this->max_sem_id;
-    this->semaphores[id] = std::make_unique<Semaphore>(*this, id, initial_count);
-    return id;
-}
-
-void Context::free_semaphore(SemaphoreID id) {
-    auto& sem = this->semaphores.at(id);
-    if (sem) {
-        CR_ASSERT(sem->waiters.empty(), "freeing a semaphore ({}) with {} waiters", id, sem->waiters.size());
-        this->semaphores.erase(id);
-    }
-}
-
-void Context::acquire(SemaphoreID id) {
-    auto& sem = *this->semaphores.at(id);
-    if (sem.count > 0) {
-        --sem.count;
-        return;
-    }
-    auto& fiber = this->current();
-    sem.waiters.push_back(fiber.id);
-
-    this->mark_blocked(fiber);
-    swap_context(&fiber.sp, this->sched_sp, nullptr);
-}
-
-void Context::release(SemaphoreID id) {
-    auto& sem = *this->semaphores.at(id);
-    if (sem.waiters.empty()) {
-        sem.count++;
-        return;
-    }
-    CR_ASSERT(sem.count == 0);
-    auto fiber_id = sem.waiters.front();
-    sem.waiters.pop_front();
-
-    auto& fiber = *this->fibers.at(fiber_id);
-    this->mark_ready(fiber);
-}
-
-bool Context::try_acquire(SemaphoreID id) {
-    auto& sem = *this->semaphores.at(id);
-    if (sem.count > 0) {
-        --sem.count;
-        return true;
-    }
-    return false;
 }
