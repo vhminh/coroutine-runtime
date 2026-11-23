@@ -1,4 +1,4 @@
-#include "semaphore.h"
+#include "sem.h"
 
 #include "check.h"
 
