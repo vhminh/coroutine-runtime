@@ -12,6 +12,7 @@ class Stack {
 public:
     Stack();
     Stack(const Stack&) = delete;
+    Stack& operator=(const Stack&) = delete;
     Stack(Stack&&);
     ~Stack();
 
@@ -33,6 +34,7 @@ struct Fiber {
 public:
     Fiber(Context& parent, FiberID id, Stack&&, std::function<void(Context&)>);
     Fiber(const Fiber&) = delete;
+    Fiber& operator=(const Fiber&) = delete;
     ~Fiber();
     const FiberID id;
 

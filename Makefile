@@ -12,6 +12,7 @@ SRCS         := arch/aarch64.cpp \
                 context.cpp \
                 fiber.cpp \
                 io-uring-version.cpp \
+                sem.cpp
 
 EXAMPLE_SRCS := echo_server.cpp \
                 probe-io-uring-version.cpp \
