@@ -19,6 +19,7 @@ extern "C" void* swap_context(void** save_sp, void* load_sp, void* ret_val);
 class Context {
     friend void fiber_start(Fiber*);
     friend class Semaphore;
+    template <class T> friend class ChanImpl;
 
 public:
     Context();
@@ -41,9 +42,10 @@ public:
 
 private:
     [[noreturn]] static void run_fiber(Fiber& f);
-    void mark_ready(Fiber&, void* resume_val = nullptr);
-    void mark_blocked(Fiber&);
-    void mark_finished(Fiber&);
+    void* park(Fiber&);
+    void unpark(Fiber&, void* resume_val = nullptr);
+    void yield(Fiber&);
+    [[noreturn]] void exit(Fiber&);
     int block_on(io_uring_sqe*);
     void* sched_sp = nullptr;
     Fiber* running = nullptr;

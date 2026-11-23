@@ -1,5 +1,6 @@
 #pragma once
 
+#include "channel.h"
 #include "context.h"
 #include "sem.h"
 
