@@ -46,6 +46,7 @@ public:
     int accept(int fd, sockaddr* addr, socklen_t* len, int flags);
     int recv(int fd, void* buf, size_t len, int flags);
     int send(int fd, const void* buf, size_t len, int flags);
+    int close(int fd);
 
     SemaphoreID new_semaphore(size_t initial_count = 0);
     void free_semaphore(SemaphoreID);

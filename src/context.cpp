@@ -182,12 +182,25 @@ int Context::recv(int fd, void* buf, size_t len, int flags) {
     this->mark_blocked(fiber);
     return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
 }
+
 int Context::send(int fd, const void* buf, size_t len, int flags) {
     auto& fiber = this->current();
 
     io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
     assert(sqe != nullptr);
     io_uring_prep_send(sqe, fd, buf, len, flags);
+    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
+
+    this->mark_blocked(fiber);
+    return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
+}
+
+int Context::close(int fd) {
+    auto& fiber = this->current();
+
+    io_uring_sqe* sqe = io_uring_get_sqe(&this->uring);
+    assert(sqe != nullptr);
+    io_uring_prep_close(sqe, fd);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
 
     this->mark_blocked(fiber);

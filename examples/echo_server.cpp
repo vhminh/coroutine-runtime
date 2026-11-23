@@ -49,7 +49,7 @@ int main() {
                     }
                 }
             end:
-                close(fd);
+                c.close(fd);
             });
         }
     });
