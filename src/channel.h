@@ -170,6 +170,7 @@ private:
 
 template <class T>
 std::pair<Sender<T>, Receiver<T>> make_channel(Context& c, size_t capacity) {
+    CR_ASSERT(capacity > 0, "unbuffered channel is not supported");
     auto impl = std::make_shared<ChanImpl<T>>(c, capacity);
     return std::make_pair(Sender<T>(impl), Receiver<T>(impl));
 }
