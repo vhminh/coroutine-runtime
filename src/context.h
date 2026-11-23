@@ -59,6 +59,7 @@ private:
     void mark_ready(Fiber&, void* resume_val = nullptr);
     void mark_blocked(Fiber&);
     void mark_finished(Fiber&);
+    int block_on(io_uring_sqe*);
     void* sched_sp = nullptr;
     Fiber* running = nullptr;
     Fiber& current();

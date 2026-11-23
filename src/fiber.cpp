@@ -1,5 +1,6 @@
 #include "fiber.h"
 
+#include "check.h"
 #include "context.h"
 
 #include <sys/mman.h>
@@ -20,13 +21,13 @@ Stack::Stack() {
         nullptr, alloc_size(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_NORESERVE, -1, 0
     );
     if (p == MAP_FAILED) {
-        throw std::bad_alloc();
+        throw SystemError(errno, "mmap");
     }
 
     // guard the lowest page, any access faults
     if (mprotect(p, page_size(), PROT_NONE) != 0) {
         munmap(p, alloc_size());
-        throw std::bad_alloc();
+        throw SystemError(errno, "mprotect");
     }
 
     this->ptr = static_cast<std::byte*>(p);
