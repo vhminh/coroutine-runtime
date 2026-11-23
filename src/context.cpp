@@ -38,7 +38,7 @@ void Context::run_loop() {
         while (this->timers.size() && this->timers.top().first <= Clock::now()) {
             auto fiber_id = this->timers.top().second;
             this->timers.pop();
-            this->mark_ready(*this->fibers.at(fiber_id));
+            this->unpark(*this->fibers.at(fiber_id));
         }
         // check IO events
         {
@@ -47,7 +47,7 @@ void Context::run_loop() {
             io_uring_for_each_cqe(&this->uring, head, cqe) {
                 auto fiber_id = reinterpret_cast<FiberID>(io_uring_cqe_get_data(cqe));
                 auto& fiber = *this->fibers.at(fiber_id);
-                this->mark_ready(fiber, reinterpret_cast<void*>(static_cast<intptr_t>(cqe->res)));
+                this->unpark(fiber, reinterpret_cast<void*>(static_cast<intptr_t>(cqe->res)));
                 i++;
             }
 
@@ -132,32 +132,40 @@ void Context::run_fiber(Fiber& fiber) {
     } catch (...) {
         std::fprintf(stderr, "coroutine-runtime: fiber %lu threw a non-std exception\n", fiber.id);
     }
-    fiber.parent.mark_finished(fiber);
-    swap_context(&fiber.sp, fiber.parent.sched_sp, nullptr);
+    fiber.parent.exit(fiber);
     __builtin_unreachable();
 }
 
-void Context::mark_ready(Fiber& fiber, void* resume_val) {
-    CR_ASSERT(fiber.state == FiberState::Ready || fiber.state == FiberState::Blocked);
+void* Context::park(Fiber& fiber) {
+    CR_ASSERT(fiber.state == FiberState::Ready);
+    fiber.state = FiberState::Blocked;
+    return swap_context(&fiber.sp, this->sched_sp, nullptr);
+}
+void Context::unpark(Fiber& fiber, void* resume_val) {
+    CR_ASSERT(fiber.state == FiberState::Blocked);
     fiber.state = FiberState::Ready;
     fiber.resume_value = resume_val;
     this->ready.push_back(fiber.id);
 }
 
-void Context::mark_blocked(Fiber& fiber) {
+void Context::yield(Fiber& fiber) {
     CR_ASSERT(fiber.state == FiberState::Ready);
-    fiber.state = FiberState::Blocked;
+    fiber.resume_value = nullptr;
+    this->ready.push_back(fiber.id);
+    swap_context(&fiber.sp, this->sched_sp, nullptr);
 }
 
-void Context::mark_finished(Fiber& fiber) {
+[[noreturn]]
+void Context::exit(Fiber& fiber) {
     CR_ASSERT(fiber.state == FiberState::Ready);
     fiber.state = FiberState::Finished;
+    swap_context(&fiber.sp, fiber.parent.sched_sp, nullptr);
+    __builtin_unreachable();
 }
 
 void Context::yield() {
     auto& fiber = this->current();
-    this->mark_ready(fiber);
-    swap_context(&fiber.sp, this->sched_sp, nullptr);
+    this->yield(fiber);
 }
 
 void Context::sleep(Clock::duration duration) {
@@ -165,8 +173,7 @@ void Context::sleep(Clock::duration duration) {
 
     this->timers.push({Clock::now() + duration, fiber.id});
 
-    this->mark_blocked(fiber);
-    swap_context(&fiber.sp, this->sched_sp, nullptr);
+    this->park(fiber);
 }
 
 io_uring_sqe* get_sqe(io_uring* ring) {
@@ -183,8 +190,8 @@ int Context::block_on(io_uring_sqe* sqe) {
 
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(fiber.id));
 
-    this->mark_blocked(fiber);
-    return static_cast<int>(reinterpret_cast<intptr_t>(swap_context(&fiber.sp, this->sched_sp, nullptr)));
+    void* ret = this->park(fiber);
+    return static_cast<int>(reinterpret_cast<intptr_t>(ret));
 }
 
 int Context::accept(int fd, sockaddr* addr, socklen_t* len, int flags) {

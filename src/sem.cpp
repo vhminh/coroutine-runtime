@@ -16,8 +16,7 @@ void Semaphore::acquire() {
     }
     this->waiters.push_back(fiber.id);
 
-    this->ctx.mark_blocked(fiber);
-    swap_context(&fiber.sp, this->ctx.sched_sp, nullptr);
+    this->ctx.park(fiber);
 }
 
 void Semaphore::release() {
@@ -31,7 +30,7 @@ void Semaphore::release() {
     this->waiters.pop_front();
 
     auto& fiber = *this->ctx.fibers.at(fiber_id);
-    this->ctx.mark_ready(fiber);
+    this->ctx.unpark(fiber);
 }
 
 bool Semaphore::try_acquire() {

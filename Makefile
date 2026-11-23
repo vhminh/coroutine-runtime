@@ -14,7 +14,8 @@ SRCS         := arch/aarch64.cpp \
                 io-uring-version.cpp \
                 sem.cpp
 
-EXAMPLE_SRCS := echo_server.cpp \
+EXAMPLE_SRCS := channel.cpp \
+                echo_server.cpp \
                 probe-io-uring-version.cpp \
                 semaphore.cpp \
                 sleep_sort.cpp \
