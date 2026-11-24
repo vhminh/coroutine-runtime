@@ -9,14 +9,17 @@ LIB := $(OUT_DIR)/libcoroutine-runtime.a
 
 SRCS         := arch/aarch64.cpp \
                 arch/x86_64.cpp \
+                channel.cpp \
                 context.cpp \
                 fiber.cpp \
                 io-uring-version.cpp \
+                select.cpp \
                 sem.cpp
 
 EXAMPLE_SRCS := channel.cpp \
                 echo_server.cpp \
                 probe-io-uring-version.cpp \
+                select.cpp \
                 semaphore.cpp \
                 sleep_sort.cpp \
                 yield.cpp

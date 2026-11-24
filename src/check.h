@@ -54,3 +54,5 @@ void assertion_failed(const char* cond, std::source_location loc, std::format_st
 #else
 #define CR_DEBUG_ASSERT(cond, ...) CR_ASSERT(cond __VA_OPT__(, ) __VA_ARGS__)
 #endif
+
+#define CR_UNREACHABLE(...) assertion_failed("unreachable", std::source_location::current() __VA_OPT__(, ) __VA_ARGS__)
