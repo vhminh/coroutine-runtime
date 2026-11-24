@@ -20,6 +20,7 @@ class Context {
     friend void fiber_start(Fiber*);
     friend class Semaphore;
     friend class Selector;
+    friend class WaitQueue;
     template <class T> friend class ChanImpl;
 
 public:

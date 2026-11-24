@@ -9,12 +9,12 @@ LIB := $(OUT_DIR)/libcoroutine-runtime.a
 
 SRCS         := arch/aarch64.cpp \
                 arch/x86_64.cpp \
-                channel.cpp \
                 context.cpp \
                 fiber.cpp \
                 io-uring-version.cpp \
                 select.cpp \
-                sem.cpp
+                sem.cpp \
+                waiter.cpp
 
 EXAMPLE_SRCS := channel.cpp \
                 echo_server.cpp \

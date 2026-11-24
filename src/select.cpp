@@ -14,9 +14,9 @@ std::optional<size_t> Selector::select() {
                 continue;
             }
             auto res = branch.try_now();
-            if (res == SelectTryStatus::Ok) {
+            if (res == RecvStatus::Ok) {
                 return i;
-            } else if (res == SelectTryStatus::Closed) {
+            } else if (res == RecvStatus::Closed) {
                 branch.closed = true;
                 return i;
             }
@@ -27,19 +27,19 @@ std::optional<size_t> Selector::select() {
             return std::nullopt;
         }
         // wait
-        SelectState state(fiber.id);
+        WakeToken token(fiber.id);
         for (auto& branch : this->branches) {
             if (branch.closed) {
                 continue;
             }
-            branch.enqueue(&state);
+            branch.enqueue(&token);
         }
         this->ctx.park(fiber);
         for (auto& branch : this->branches) {
             if (branch.closed) {
                 continue;
             }
-            branch.dequeue(&state);
+            branch.dequeue(&token);
         }
     }
 }

@@ -2,17 +2,10 @@
 
 #include "channel.h"
 
-
-enum class SelectTryStatus {
-    Ok,
-    NotReady,
-    Closed,
-};
-
 struct SelectBranch {
-    std::function<SelectTryStatus(void)> try_now;
-    std::function<void(SelectState*)> enqueue;
-    std::function<void(SelectState*)> dequeue;
+    std::function<RecvStatus(void)> try_now;
+    std::function<void(WakeToken*)> enqueue;
+    std::function<void(WakeToken*)> dequeue;
     bool closed = false;
 };
 
@@ -23,30 +16,14 @@ public:
     Selector& operator=(const Selector&) = delete;
 
     template <class T>
-    size_t recv(Receiver<T> chann, std::optional<T>& out) {
+    size_t recv(const Receiver<T>& chann, std::optional<T>& out) {
         CR_ASSERT(&chann.impl->ctx == &this->ctx);
         size_t index = branches.size();
+        auto ch = chann.impl;
         SelectBranch branch = SelectBranch{
-            .try_now =
-                [chann, &out]() {
-                    auto res = chann.impl->try_recv(out);
-                    switch (res) {
-                    case RecvStatus::Ok:
-                        return SelectTryStatus::Ok;
-                    case RecvStatus::Empty:
-                        return SelectTryStatus::NotReady;
-                    case RecvStatus::Closed:
-                        out = std::nullopt;
-                        return SelectTryStatus::Closed;
-                    }
-                    CR_UNREACHABLE();
-                },
-            .enqueue =
-                [chann](SelectState* state) {
-                    SelectWaiter waiter(state);
-                    chann.impl->add_recv_waiter(waiter);
-                },
-            .dequeue = [chann](SelectState* state) { chann.impl->remove_waiters(state); }
+            .try_now = [ch, &out]() { return ch->try_recv(out); },
+            .enqueue = [ch](WakeToken* token) { ch->add_recv_waiter(token); },
+            .dequeue = [ch](WakeToken* token) { ch->remove_waiters(token); }
         };
         branches.emplace_back(std::move(branch));
         return index;

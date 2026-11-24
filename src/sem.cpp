@@ -5,7 +5,7 @@
 Semaphore::Semaphore(Context& parent, size_t initial_count) : ctx(parent), count(initial_count) {}
 
 Semaphore::~Semaphore() {
-    CR_ASSERT(this->waiters.empty(), "freeing a semaphore with {} waiters", this->waiters.size());
+    CR_ASSERT(this->waiters.empty(), "freeing a semaphore with waiters");
 }
 
 void Semaphore::acquire() {
@@ -14,7 +14,8 @@ void Semaphore::acquire() {
         --this->count;
         return;
     }
-    this->waiters.push_back(fiber.id);
+    WakeToken token(fiber.id);
+    this->waiters.push(&token);
 
     this->ctx.park(fiber);
 }
@@ -26,11 +27,7 @@ void Semaphore::release() {
         return;
     }
     CR_ASSERT(this->count == 0);
-    auto fiber_id = this->waiters.front();
-    this->waiters.pop_front();
-
-    auto& fiber = *this->ctx.fibers.at(fiber_id);
-    this->ctx.unpark(fiber);
+    waiters.wake_one(this->ctx);
 }
 
 bool Semaphore::try_acquire() {
