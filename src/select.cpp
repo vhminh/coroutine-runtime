@@ -4,42 +4,42 @@
 
 Selector::Selector(Context& ctx) : ctx(ctx) {}
 
-size_t Selector::select() {
+std::optional<size_t> Selector::select() {
     auto& fiber = this->ctx.current();
-    SelectState state(fiber.id);
     while (true) {
         // check for already available values
-        for (auto& branch : this->branches) {
-            size_t index = branch.index;
+        for (size_t i = 0; i < this->branches.size(); ++i) {
+            SelectBranch& branch = this->branches[i];
+            if (branch.closed) {
+                continue;
+            }
             auto res = branch.try_now();
             if (res == SelectTryStatus::Ok) {
-                return index;
-            } else if (res == SelectTryStatus::Closed && !this->closed[index]) {
-                this->closed[index] = true;
-                return index;
+                return i;
+            } else if (res == SelectTryStatus::Closed) {
+                branch.closed = true;
+                return i;
             }
         }
         // check for completion
-        bool all_closed = std::all_of(this->closed.begin(), this->closed.end(), [](bool b) { return b; });
+        bool all_closed = std::all_of(this->branches.begin(), this->branches.end(), [](auto& b) { return b.closed; });
         if (all_closed) {
-            return (size_t)-1;
+            return std::nullopt;
         }
         // wait
+        SelectState state(fiber.id);
         for (auto& branch : this->branches) {
+            if (branch.closed) {
+                continue;
+            }
             branch.enqueue(&state);
         }
         this->ctx.park(fiber);
         for (auto& branch : this->branches) {
+            if (branch.closed) {
+                continue;
+            }
             branch.dequeue(&state);
-        }
-        // try again
-        size_t index = state.fired_index;
-        auto res = this->branches[index].try_now();
-        if (res == SelectTryStatus::Ok) {
-            return index;
-        } else if (res == SelectTryStatus::Closed && !this->closed[index]) {
-            this->closed[index] = true;
-            return index;
         }
     }
 }

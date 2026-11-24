@@ -15,6 +15,7 @@ enum class RecvStatus { Ok, Empty, Closed };
 template <class T> class Sender;
 template <class T> class Receiver;
 
+
 struct PlainWaiter {
     PlainWaiter(FiberID fiber_id);
     FiberID fiber_id;
@@ -23,14 +24,12 @@ struct PlainWaiter {
 struct SelectState {
     SelectState(FiberID);
     FiberID fiber_id;
-    bool woken = false;
-    size_t fired_index = -1;
+    bool claimed = false;
 };
 
 struct SelectWaiter {
-    SelectWaiter(SelectState* sel, size_t branch_index);
-    SelectState* sel;
-    size_t branch_index;
+    SelectWaiter(SelectState* sel);
+    SelectState* state;
 };
 
 struct Waiter {
@@ -41,7 +40,7 @@ public:
 
     FiberID fiber_id() const;
     bool stale() const;
-    std::optional<FiberID> notify();
+    std::optional<FiberID> claim();
 };
 
 template <class T>
@@ -129,6 +128,21 @@ public:
         return RecvStatus::Ok;
     }
 
+    [[nodiscard]] RecvStatus try_recv(std::optional<T>& out) {
+        if (this->is_closed && this->empty()) {
+            out = std::nullopt;
+            return RecvStatus::Closed;
+        }
+        if (this->empty()) {
+            out = std::nullopt;
+            return RecvStatus::Empty;
+        }
+        out = std::move(this->buffer.front());
+        this->buffer.pop_front();
+        this->notify_item_removed();
+        return RecvStatus::Ok;
+    }
+
     void close() {
         this->is_closed = true;
         this->notify_all();
@@ -140,21 +154,16 @@ public:
 
     bool full() const { return this->buffer.size() >= capacity; }
 
-    void enqueue_sender(Waiter w) {
-        CR_ASSERT(this->full());
-        this->send_waiters.push_back(w);
-    }
-
-    void enqueue_receiver(Waiter w) {
+    void add_recv_waiter(Waiter w) {
         CR_ASSERT(this->empty());
         this->recv_waiters.push_back(w);
     }
 
     // FIXME: this runs in O(n)
-    void dequeue(SelectState* s) {
+    void remove_waiters(SelectState* s) {
         auto mine = [&](const Waiter& w) {
             auto* p = std::get_if<SelectWaiter>(&w.inner);
-            return p && p->sel == s;
+            return p && p->state == s;
         };
         std::erase_if(this->send_waiters, mine);
         std::erase_if(this->recv_waiters, mine);
@@ -175,7 +184,7 @@ private:
         if (this->recv_waiters.size()) {
             auto waiter = this->recv_waiters.front();
             this->recv_waiters.pop_front();
-            auto fiber_id = waiter.notify();
+            auto fiber_id = waiter.claim();
             CR_ASSERT(fiber_id, "expect non stale waiter");
             this->ctx.unpark(*this->ctx.fibers.at(*fiber_id));
         }
@@ -187,7 +196,7 @@ private:
         if (this->send_waiters.size()) {
             auto waiter = this->send_waiters.front();
             this->send_waiters.pop_front();
-            auto fiber_id = waiter.notify();
+            auto fiber_id = waiter.claim();
             CR_ASSERT(fiber_id, "expect non stale waiter");
             this->ctx.unpark(*this->ctx.fibers.at(*fiber_id));
         }
@@ -196,7 +205,7 @@ private:
         while (this->recv_waiters.size()) {
             auto waiter = this->recv_waiters.front();
             this->recv_waiters.pop_front();
-            auto fiber_id = waiter.notify();
+            auto fiber_id = waiter.claim();
             if (fiber_id) {
                 this->ctx.unpark(*this->ctx.fibers.at(*fiber_id));
             }
@@ -204,7 +213,7 @@ private:
         while (this->send_waiters.size()) {
             auto waiter = this->send_waiters.front();
             this->send_waiters.pop_front();
-            auto fiber_id = waiter.notify();
+            auto fiber_id = waiter.claim();
             if (fiber_id) {
                 this->ctx.unpark(*this->ctx.fibers.at(*fiber_id));
             }

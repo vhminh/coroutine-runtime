@@ -4,34 +4,33 @@ PlainWaiter::PlainWaiter(FiberID fiber_id) : fiber_id(fiber_id) {}
 
 SelectState::SelectState(FiberID fiber_id) : fiber_id(fiber_id) {}
 
-SelectWaiter::SelectWaiter(SelectState* sel, size_t branch_index) : sel(sel), branch_index(branch_index) {}
+SelectWaiter::SelectWaiter(SelectState* state) : state(state) {}
 
 FiberID Waiter::fiber_id() const {
     if (auto* p = std::get_if<PlainWaiter>(&inner)) {
         return p->fiber_id;
     } else if (auto* p = std::get_if<SelectWaiter>(&inner)) {
-        return p->sel->fiber_id;
+        return p->state->fiber_id;
     }
     CR_UNREACHABLE("unknown waiter kind");
 }
 
 bool Waiter::stale() const {
     if (auto* p = std::get_if<SelectWaiter>(&inner)) {
-        return p->sel->woken;
+        return p->state->claimed;
     }
     return false;
 }
 
-std::optional<FiberID> Waiter::notify() {
+std::optional<FiberID> Waiter::claim() {
     if (auto* p = std::get_if<PlainWaiter>(&inner)) {
         return p->fiber_id;
     } else if (auto* p = std::get_if<SelectWaiter>(&inner)) {
-        if (p->sel->woken) {
+        if (p->state->claimed) {
             return std::nullopt;
         }
-        p->sel->woken = true;
-        p->sel->fired_index = p->branch_index;
-        return p->sel->fiber_id;
+        p->state->claimed = true;
+        return p->state->fiber_id;
     }
     CR_UNREACHABLE("unknown waiter kind");
 }

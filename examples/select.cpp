@@ -1,8 +1,5 @@
-#include "select.h"
-
 #include "coroutine-runtime.h"
 
-#include <cassert>
 #include <chrono>
 #include <initializer_list>
 #include <iostream>
@@ -18,7 +15,7 @@ Receiver<int> channel_from_list(Context& c, std::initializer_list<int> items) {
     return r;
 }
 
-Receiver<int> timeout(Context& c, Context::Clock::duration interval, int val) {
+Receiver<int> after(Context& c, Context::Clock::duration interval, int val) {
     auto [s, r] = make_channel<int>(c, 1);
     c.spawn([=](Context& c) mutable {
         c.sleep(interval);
@@ -32,17 +29,17 @@ int main() {
     Context c;
     c.spawn([](Context& c) {
         auto chan0 = channel_from_list(c, {0, 0});
-        auto chan1 = timeout(c, 1s, 1);
-        auto chan2 = timeout(c, 2s, 2);
-        auto chan3 = timeout(c, 3s, 3);
+        auto chan1 = after(c, 1s, 1);
+        auto chan2 = after(c, 2s, 2);
+        auto chan3 = after(c, 3s, 3);
         std::optional<int> value;
         Selector selector(c);
-        size_t selected;
+        std::optional<size_t> selected;
         size_t selected0 = selector.recv(chan0, value);
         size_t selected1 = selector.recv(chan1, value);
         size_t selected2 = selector.recv(chan2, value);
         size_t selected3 = selector.recv(chan3, value);
-        while ((selected = selector.select()) != (size_t)-1) {
+        while ((selected = selector.select()) != std::nullopt) {
             if (selected == selected0) {
                 if (value) {
                     std::cout << "channel 0 recv " << *value << std::endl;
@@ -68,7 +65,7 @@ int main() {
                     std::cout << "channel 3 closed" << std::endl;
                 }
             } else {
-                CR_UNREACHABLE("unexpected selected index {}", selected);
+                CR_UNREACHABLE("unexpected selected index {}", *selected);
             }
         }
     });
