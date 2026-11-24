@@ -19,6 +19,8 @@ extern "C" void* swap_context(void** save_sp, void* load_sp, void* ret_val);
 class Context {
     friend void fiber_start(Fiber*);
     friend class Semaphore;
+    friend class Selector;
+    friend class WaitQueue;
     template <class T> friend class ChanImpl;
 
 public:

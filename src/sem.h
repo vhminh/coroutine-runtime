@@ -1,6 +1,7 @@
 #pragma once
 
 #include "context.h"
+#include "waiter.h"
 
 class Semaphore {
 public:
@@ -15,5 +16,5 @@ public:
 private:
     Context& ctx;
     size_t count;
-    std::deque<FiberID> waiters;
+    WaitQueue waiters;
 };

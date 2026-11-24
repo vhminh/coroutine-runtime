@@ -3,6 +3,7 @@
 #include "check.h"
 #include "context.h"
 #include "def.h"
+#include "waiter.h"
 
 #include <deque>
 #include <optional>
@@ -17,6 +18,7 @@ template <class T> class Receiver;
 template <class T>
 class ChanImpl {
 public:
+    friend class Selector;
     ChanImpl(Context& ctx, size_t capacity) : ctx(ctx), capacity(capacity) {}
     ChanImpl(const ChanImpl&) = delete;
     ChanImpl& operator=(const ChanImpl&) = delete;
@@ -28,9 +30,10 @@ public:
         if (this->is_closed) {
             return false;
         }
-        while (!this->is_closed && this->buffer.size() >= this->capacity) {
+        while (!this->is_closed && this->full()) {
             auto& fiber = this->ctx.current();
-            full_waiters.push_back(fiber.id);
+            WakeToken token(fiber.id);
+            this->send_waiters.push(&token);
             this->ctx.park(fiber);
         }
         if (this->is_closed) {
@@ -39,7 +42,7 @@ public:
         }
         CR_ASSERT(this->buffer.size() < capacity);
         this->buffer.emplace_back(std::forward<T>(value));
-        this->notify_item_added();
+        this->recv_waiters.wake_one(this->ctx);
         return true;
     }
 
@@ -49,94 +52,101 @@ public:
         if (this->is_closed) {
             return SendStatus::Closed;
         }
-        if (this->buffer.size() >= this->capacity) {
+        if (this->full()) {
             return SendStatus::Full;
         }
         this->buffer.emplace_back(std::forward<T>(value));
-        this->notify_item_added();
+        this->recv_waiters.wake_one(this->ctx);
         return SendStatus::Ok;
     }
 
     std::optional<T> recv() {
         CR_ASSERT(ctx.running, "must be running inside a fiber");
-        if (this->is_closed && this->buffer.empty()) {
+        if (this->is_closed && this->empty()) {
             return std::nullopt;
         }
-        while (!this->is_closed && this->buffer.empty()) {
+        while (!this->is_closed && this->empty()) {
             auto& fiber = this->ctx.current();
-            empty_waiters.push_back(fiber.id);
+            WakeToken token(fiber.id);
+            this->recv_waiters.push(&token);
             this->ctx.park(fiber);
         }
-        if (this->buffer.empty()) {
+        if (this->empty()) {
             // channel closed and drained while we're blocking
             return std::nullopt;
         }
         T out = std::move(this->buffer.front());
         this->buffer.pop_front();
-        this->notify_item_removed();
+        this->send_waiters.wake_one(this->ctx);
         return out;
     }
 
     [[nodiscard]] RecvStatus try_recv(T& out) {
-        if (this->is_closed && this->buffer.empty()) {
+        if (this->is_closed && this->empty()) {
             return RecvStatus::Closed;
         }
-        if (this->buffer.empty()) {
+        if (this->empty()) {
             return RecvStatus::Empty;
         }
         out = std::move(this->buffer.front());
         this->buffer.pop_front();
-        this->notify_item_removed();
+        this->send_waiters.wake_one(this->ctx);
+        return RecvStatus::Ok;
+    }
+
+    [[nodiscard]] RecvStatus try_recv(std::optional<T>& out) {
+        if (this->is_closed && this->empty()) {
+            out = std::nullopt;
+            return RecvStatus::Closed;
+        }
+        if (this->empty()) {
+            out = std::nullopt;
+            return RecvStatus::Empty;
+        }
+        out = std::move(this->buffer.front());
+        this->buffer.pop_front();
+        this->send_waiters.wake_one(this->ctx);
         return RecvStatus::Ok;
     }
 
     void close() {
         this->is_closed = true;
-        this->notify_all();
+        this->send_waiters.wake_all(this->ctx);
+        this->recv_waiters.wake_all(this->ctx);
     }
 
     bool closed() const { return this->is_closed; }
+
+    bool empty() const { return this->buffer.empty(); }
+
+    bool full() const { return this->buffer.size() >= capacity; }
+
+    void add_recv_waiter(WakeToken* token) {
+        CR_ASSERT(token);
+        CR_ASSERT(this->empty());
+        this->recv_waiters.push(token);
+    }
+
+    void remove_waiters(WakeToken* token) {
+        CR_ASSERT(token);
+        this->send_waiters.remove(token);
+        this->recv_waiters.remove(token);
+    }
 
 private:
     Context& ctx;
     std::deque<T> buffer;
     const size_t capacity;
     bool is_closed = false;
-    std::deque<FiberID> full_waiters;
-    std::deque<FiberID> empty_waiters;
-
-    void notify_item_added() {
-        if (this->empty_waiters.size()) {
-            auto fiberID = this->empty_waiters.front();
-            this->empty_waiters.pop_front();
-            this->ctx.unpark(*this->ctx.fibers.at(fiberID));
-        }
-    }
-    void notify_item_removed() {
-        if (this->full_waiters.size()) {
-            auto fiberID = this->full_waiters.front();
-            this->full_waiters.pop_front();
-            this->ctx.unpark(*this->ctx.fibers.at(fiberID));
-        }
-    }
-    void notify_all() {
-        while (this->empty_waiters.size()) {
-            auto fiberID = this->empty_waiters.front();
-            this->empty_waiters.pop_front();
-            this->ctx.unpark(*this->ctx.fibers.at(fiberID));
-        }
-        while (this->full_waiters.size()) {
-            auto fiberID = this->full_waiters.front();
-            this->full_waiters.pop_front();
-            this->ctx.unpark(*this->ctx.fibers.at(fiberID));
-        }
-    }
+    WaitQueue send_waiters;
+    WaitQueue recv_waiters;
 };
 
 template <class T>
 class Sender {
     template <class T2>
     friend std::pair<Sender<T2>, Receiver<T2>> make_channel(Context& c, size_t capacity);
+    friend class Selector;
 
 public:
     bool send(const T& value) { return impl->send(value); }
@@ -156,6 +166,7 @@ template <class T>
 class Receiver {
     template <class T2>
     friend std::pair<Sender<T2>, Receiver<T2>> make_channel(Context& c, size_t capacity);
+    friend class Selector;
 
 public:
     std::optional<T> recv() { return impl->recv(); }
