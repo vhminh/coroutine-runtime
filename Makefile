@@ -16,6 +16,7 @@ SRCS         := arch/aarch64.cpp \
                 waiter.cpp
 
 EXAMPLE_SRCS := channel.cpp \
+                chat_server.cpp \
                 echo_server.cpp \
                 select.cpp \
                 semaphore.cpp \
