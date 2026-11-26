@@ -7,8 +7,11 @@
 #include <deque>
 #include <iosfwd>
 #include <liburing.h>
+#include <linux/openat2.h>
 #include <queue>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unordered_map>
 
 const size_t IO_URING_QUEUE_DEPTH = 2048;
@@ -41,6 +44,9 @@ public:
     int recv(int fd, void* buf, size_t len, int flags);
     int send(int fd, const void* buf, size_t len, int flags);
     int close(int fd);
+    int openat2(int fd, const char* path, open_how* how);
+    int read(int fd, void* buf, unsigned len, uint64_t offset);
+    int statx(int fd, const char* path, int flags, unsigned mask, struct statx* statxbuf);
 
 private:
     [[noreturn]] static void run_fiber(Fiber& f);

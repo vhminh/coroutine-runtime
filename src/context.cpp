@@ -217,3 +217,21 @@ int Context::close(int fd) {
     io_uring_prep_close(sqe, fd);
     return this->block_on(sqe);
 }
+
+int Context::openat2(int fd, const char* path, open_how* how) {
+    io_uring_sqe* sqe = get_sqe(&this->uring);
+    io_uring_prep_openat2(sqe, fd, path, how);
+    return this->block_on(sqe);
+}
+
+int Context::read(int fd, void* buf, unsigned len, uint64_t offset) {
+    io_uring_sqe* sqe = get_sqe(&this->uring);
+    io_uring_prep_read(sqe, fd, buf, len, offset);
+    return this->block_on(sqe);
+}
+
+int Context::statx(int fd, const char* path, int flags, unsigned mask, struct statx* statxbuf) {
+    io_uring_sqe* sqe = get_sqe(&this->uring);
+    io_uring_prep_statx(sqe, fd, path, flags, mask, statxbuf);
+    return this->block_on(sqe);
+}
