@@ -89,5 +89,5 @@ make dev-x86 # x86-64 under emulation. Compiles, but io_uring isn't available un
 ```
 
 ## Acknowledgements
-- [Tsoding](https://www.youtube.com/@TsodingDaily)'s [video on implementing Python-style `yield` with stack switching in assembly](https://youtu.be/uFET2vifHh4)
+- [Tsoding](https://github.com/tsoding)'s [video on implementing Python-style `yield` with stack switching in assembly](https://youtu.be/uFET2vifHh4)
 - [Lord of the io_uring](https://unixism.net/loti/), the io_uring guide
