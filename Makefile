@@ -18,6 +18,7 @@ SRCS         := arch/aarch64.cpp \
 EXAMPLE_SRCS := channel.cpp \
                 chat_server.cpp \
                 echo_server.cpp \
+                http_server.cpp \
                 select.cpp \
                 semaphore.cpp \
                 sleep_sort.cpp \
