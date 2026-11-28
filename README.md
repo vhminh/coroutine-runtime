@@ -1,6 +1,7 @@
 # coroutine runtime
 
-A stackful coroutine runtime on Linux that lets you write plain blocking-style code in lightweight user threads, with io_uring handling the I/O
+A stackful coroutine runtime on Linux that lets you write plain blocking-style code in lightweight user threads.
+They all share one OS thread. When a user thread waits for I/O, the others keep running, so one OS thread can serve many connections.
 
 ## Features
 - Lightweight user threads (fibers) multiplexed on a single OS thread
@@ -16,27 +17,35 @@ A stackful coroutine runtime on Linux that lets you write plain blocking-style c
 - Fixed-size stack per fiber
 
 ## How: stack switching
-Each connection runs in a fiber: a lightweight thread with its own small stack, like Go's goroutines or Java's virtual threads.
-A fiber's stack holds its whole call chain: every function's local variables and return address.
-To pause a fiber, the runtime saves its registers and stack pointer, then loads another stack's.
-The paused call chain stays untouched until the runtime switches back.
+Each user thread (fiber) has its own small stack. That stack holds every function the fiber is executing, with their local variables and return addresses.
+
+Switching fibers means saving the current CPU's stack pointer register, then loading the ones saved for another fiber. The paused fiber's stack stays exactly as it was, so when the scheduler switches back, it carries on where it stopped.
+
+I/O goes through [io_uring](https://unixism.net/loti/), a Linux async I/O interface. I/O requests are put in a submission queue, and the kernel puts results in a completion queue.
+
+The scheduler keeps track of every fiber and whether it's ready or waiting. In the run loop, it runs each ready fiber until it yields, for example by starting I/O. Then it checks the completion queue and marks the fibers whose I/O finished as ready again.
 
 ```mermaid
-flowchart LR
-    A["<b>Fiber A's stack</b><br/>---------------<br/>c.recv() (paused)<br/>read_line()<br/>handle()"]
-    S["<b>Scheduler's stack</b><br/>---------------<br/>run_loop() (running)<br/> <br/> "]
-    B["<b>Fiber B's stack</b><br/>---------------<br/>c.recv() (paused)<br/>read_line()<br/>handle()"]
+sequenceDiagram
+    participant A as Fiber A
+    participant B as Fiber B
+    participant R as Scheduler run loop
+    box io_uring
+        participant SQ as Submission queue
+        participant CQ as Completion queue
+    end
 
-    A <-- "switch" --> S
-    S <-- "switch" --> B
+    A->>SQ: c.recv() adds a read request
+    A->>R: switch to run loop (swap stack pointer)
+    R->>B: switch to fiber B
+    B->>R: B waits on its own I/O, switch to run loop
+    Note over SQ,CQ: data arrives
+    SQ-->>CQ: read done
+    R->>CQ: check for results
+    R->>A: switch to fiber A, c.recv() returns
 ```
 
-1. Fiber A calls `c.recv()`: the read is submitted to [io_uring](https://unixism.net/loti/), and A switches to the scheduler's stack.
-2. The scheduler runs other fibers until io_uring reports that A's read is done.
-3. It switches back to A's stack, and `c.recv()` returns as if it had simply blocked.
-
-The switch is about 20 lines of assembly per architecture: push the callee-saved registers, swap the stack pointer, pop, return
-([x86-64](src/arch/x86_64.cpp), [aarch64](src/arch/aarch64.cpp)).
+The switch itself is about 20 lines of assembly per CPU architecture: push the callee-saved registers, swap the stack pointer, pop, then return ([x86-64](src/arch/x86_64.cpp), [aarch64](src/arch/aarch64.cpp)).
 
 ## Examples
 A single-threaded echo server: [`examples/echo_server.cpp`](examples/echo_server.cpp)
