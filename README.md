@@ -9,12 +9,31 @@ They all share one OS thread. When a user thread waits for I/O, the others keep 
 - Timers (`c.sleep(duration)`)
 - Go-inspired concurrency primitives: buffered channels, `select` over multiple channels, semaphores
 
-## Limitations
-- Single-threaded
-- Channels must be buffered
-- `select` only supports receive branches
-- No cancellation support for now
-- Fixed-size stack per fiber
+## Examples
+A single-threaded echo server: [`examples/echo_server.cpp`](examples/echo_server.cpp)
+
+```cpp
+Context c;
+c.spawn([](Context& c) {
+    int listen_fd = /* socket() + bind() + listen() */;
+    while (true) {
+        int fd = c.accept(listen_fd, nullptr, nullptr, 0);   // parks this fiber, not the thread
+        c.spawn([fd](Context& c) {                           // one fiber per connection
+            char buf[4096];
+            int n;
+            while ((n = c.recv(fd, buf, sizeof buf, 0)) > 0) {
+                c.send(fd, buf, n, MSG_NOSIGNAL);
+            }
+            c.close(fd);
+        });
+    }
+});
+c.run_loop();
+```
+
+More examples:
+- Chat server: [`examples/chat_server.cpp`](examples/chat_server.cpp)
+- HTTP file server: [`examples/http_server.cpp`](examples/http_server.cpp)
 
 ## How: stack switching
 Each user thread (fiber) has its own small stack. That stack holds every function the fiber is executing, with their local variables and return addresses.
@@ -47,31 +66,12 @@ sequenceDiagram
 
 The switch itself is about 20 lines of assembly per CPU architecture: push the callee-saved registers, swap the stack pointer, pop, then return ([x86-64](src/arch/x86_64.cpp), [aarch64](src/arch/aarch64.cpp)).
 
-## Examples
-A single-threaded echo server: [`examples/echo_server.cpp`](examples/echo_server.cpp)
-
-```cpp
-Context c;
-c.spawn([](Context& c) {
-    int listen_fd = /* socket() + bind() + listen() */;
-    while (true) {
-        int fd = c.accept(listen_fd, nullptr, nullptr, 0);   // parks this fiber, not the thread
-        c.spawn([fd](Context& c) {                           // one fiber per connection
-            char buf[4096];
-            int n;
-            while ((n = c.recv(fd, buf, sizeof buf, 0)) > 0) {
-                c.send(fd, buf, n, MSG_NOSIGNAL);
-            }
-            c.close(fd);
-        });
-    }
-});
-c.run_loop();
-```
-
-More examples:
-- Chat server: [`examples/chat_server.cpp`](examples/chat_server.cpp)
-- HTTP file server: [`examples/http_server.cpp`](examples/http_server.cpp)
+## Limitations
+- Single-threaded
+- Channels must be buffered
+- `select` only supports receive branches
+- No cancellation support for now
+- Fixed-size stack per fiber
 
 ## Requirements
 - Linux x86-64 or aarch64
